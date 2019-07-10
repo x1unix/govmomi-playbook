@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"github.com/vmware/govmomi/vim25/types"
 	"net/url"
+	"os"
 
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/view"
@@ -12,13 +14,30 @@ import (
 	"github.com/vmware/govmomi/vim25/mo"
 )
 
-const (
-	V6 = `https://root:awwtgl01@@10.31.39.214/sdk`
-	V4 = `https://10.31.39.180/sdk`
+var (
+	username string
+	password string
+	hostname string
 )
 
+const ToolsNotRunning = "guestToolsNotRunning"
+
 func main() {
-	u, _ := url.Parse(V6)
+
+	flag.StringVar(&username, "u", "", "Username")
+	flag.StringVar(&password, "p", "", "Password")
+	flag.StringVar(&hostname, "h", "", "ESXi hostname")
+
+	flag.Parse()
+
+	if username == "" || hostname == "" {
+		fmt.Println("Please specify hostname, username and password")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	raw := fmt.Sprintf("https://%s:%s@%s/sdk", username, password, hostname)
+	u, _ := url.Parse(raw)
 	c, err := govmomi.NewClient(context.Background(), u, true)
 	if err != nil {
 		panic(err)
@@ -65,7 +84,6 @@ func printVM(vm mo.VirtualMachine) {
 		// "MAC Addr:"
 	}
 
-
 	fmt.Println(vm.Summary.Config.Name)
 	for k, v := range keys {
 		fmt.Printf("\t%s\t: %s\n", k, v)
@@ -73,9 +91,12 @@ func printVM(vm mo.VirtualMachine) {
 
 	poweredOn := vm.Summary.Runtime.PowerState == types.VirtualMachinePowerStatePoweredOn
 	if poweredOn && vm.Summary.Guest != nil {
+		if vm.Summary.Guest.ToolsRunningStatus == ToolsNotRunning {
+			return
+		}
+
 		printExtendedData(vm)
 	}
-
 
 	//getMacAddr(vm)
 	//fmt.Printf("%s\n", vm.Summary.Config.Name)
@@ -87,9 +108,9 @@ func printVM(vm mo.VirtualMachine) {
 func printExtendedData(vm mo.VirtualMachine) {
 	guest := vm.Summary.Guest
 	keys := map[string]string{
-		"Tools Installed": guest.ToolsRunningStatus,
+		"IP Addr":  guest.IpAddress,
+		"VM Tools": guest.ToolsRunningStatus,
 		"Hostname": guest.HostName,
-		"IP": guest.IpAddress,
 		"Guest OS": guest.GuestFullName,
 	}
 	for k, v := range keys {

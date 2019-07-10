@@ -1,4 +1,4 @@
-module test0
+module esxi6-cli
 
 go 1.12
 
